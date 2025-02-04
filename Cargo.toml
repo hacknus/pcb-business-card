@@ -1,0 +1,21 @@
+[package]
+name = "pcb-business-card"
+version = "0.1.0"
+edition = "2021"
+
+[profile.release]
+opt-level = "s"
+lto = true
+debug = true
+codegen-units = 1
+
+[dependencies]
+embedded-hal = "1.0.0"
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+sht4x = "0.1.0"
+panic-halt = "1.0.0"
+
+[dependencies.stm32l0xx-hal]
+version = "0.10.0"
+features = ["rt", "mcu-STM32L031K6Tx"] # replace the model of your microcontroller here
