@@ -16,7 +16,7 @@ fn main() -> ! {
     let dp = pac::Peripherals::take().unwrap();
     let cp = cortex_m::Peripherals::take().unwrap();
 
-    let mut rcc = dp.RCC.freeze(Config::default());
+    let mut rcc = dp.RCC.freeze(Config::hsi16());
 
     // initialize ports
     let gpioa = dp.GPIOA.split(&mut rcc);
