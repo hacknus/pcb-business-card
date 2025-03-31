@@ -10,7 +10,7 @@ debug = true
 codegen-units = 1
 
 [dependencies]
-embedded-hal = "1.0.0"
+embedded-hal = "0.2"
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
 sht4x = "0.1.0"

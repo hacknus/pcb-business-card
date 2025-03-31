@@ -46,7 +46,6 @@ fn main() -> ! {
     let scl = gpioa.pa9.into_open_drain_output();
     let i2c1 = dp.I2C1.i2c(sda, scl, 100_000.Hz(), &mut rcc);
 
-    //let mut sht40 = Sht4x::new(i2c1);
     let mut sht40 = Sht4x::new_with_address(i2c1, Address0x44);
 
     loop {
@@ -76,32 +75,6 @@ fn main() -> ! {
                 _ => {}
             }
         }
-        if sw.is_high().unwrap() {
-            t1.set_low().unwrap();
-            t2.set_low().unwrap();
-            t3.set_high().unwrap();
-            t4.set_high().unwrap();
-        } else {
-            t1.set_high().unwrap();
-            t2.set_high().unwrap();
-            t3.set_low().unwrap();
-            t4.set_low().unwrap();
-        }
-        delay.delay(100.milliseconds());
+        delay.delay(500.milliseconds());
     }
-}
-
-#[exception]
-#[allow(non_snake_case)]
-unsafe fn DefaultHandler(_irqn: i16) {
-    // custom default handler
-    // irqn is negative for Cortex-M exceptions
-    // irqn is positive for device specific (line IRQ)
-    // panic!("Exception: {}", irqn);
-}
-
-#[exception]
-#[allow(non_snake_case)]
-unsafe fn HardFault(_ef: &ExceptionFrame) -> ! {
-    loop {}
 }
