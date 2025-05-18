@@ -10,13 +10,14 @@ use sht4x::{Precision, Sht4x};
 use stm32l0xx_hal::{delay::Delay, pac, prelude::*, rcc::Config, rtc, rtc::{Rtc}};
 use stm32l0xx_hal::exti::{ConfigurableLine, Exti, TriggerEdge};
 use stm32l0xx_hal::pwr::PWR;
+use stm32l0xx_hal::rcc::MSIRange;
 
 #[entry]
 fn main() -> ! {
     let dp = pac::Peripherals::take().unwrap();
     let cp = cortex_m::Peripherals::take().unwrap();
 
-    let mut rcc = dp.RCC.freeze(Config::hsi16());
+    let mut rcc = dp.RCC.freeze(Config::msi(MSIRange::Range0));
     let mut scb = cp.SCB;
     let mut exti = Exti::new(dp.EXTI);
     let mut pwr = PWR::new(dp.PWR, &mut rcc);
