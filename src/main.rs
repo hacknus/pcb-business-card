@@ -1,15 +1,15 @@
-//#![deny(unsafe_code)]
 #![no_main]
 #![no_std]
 
 extern crate panic_halt;
 
-use cortex_m_rt::exception;
-use cortex_m_rt::{entry, ExceptionFrame};
+use cortex_m_rt::entry;
+use embedded_hal::digital::v2::OutputPin;
 use sht4x::Address::Address0x44;
 use sht4x::{Precision, Sht4x};
-use stm32l0xx_hal::rcc::Config;
-use stm32l0xx_hal::{pac, prelude::*};
+use stm32l0xx_hal::{delay::Delay, pac, prelude::*, rcc::Config, rtc, rtc::{Rtc}};
+use stm32l0xx_hal::exti::{ConfigurableLine, Exti, TriggerEdge};
+use stm32l0xx_hal::pwr::PWR;
 
 #[entry]
 fn main() -> ! {
@@ -17,64 +17,81 @@ fn main() -> ! {
     let cp = cortex_m::Peripherals::take().unwrap();
 
     let mut rcc = dp.RCC.freeze(Config::hsi16());
+    let mut scb = cp.SCB;
+    let mut exti = Exti::new(dp.EXTI);
+    let mut pwr = PWR::new(dp.PWR, &mut rcc);
 
-    // initialize ports
+    let mut rtc = Rtc::new(dp.RTC, &mut rcc, &mut pwr, None).unwrap();
+
+    // GPIO setup
     let gpioa = dp.GPIOA.split(&mut rcc);
     let gpiob = dp.GPIOB.split(&mut rcc);
 
-    // Get the delay provider.
-    let mut delay = cp.SYST.delay(rcc.clocks);
+    let mut delay = Delay::new(cp.SYST, rcc.clocks);
 
-    // initialize leds
-    let mut t1 = gpiob.pb4.into_push_pull_output();
-    let mut t2 = gpioa.pa15.into_push_pull_output();
-    let mut t3 = gpiob.pb3.into_push_pull_output();
-    let mut t4 = gpiob.pb5.into_push_pull_output();
-
+    // LED outputs
     let mut rh30 = gpioa.pa7.into_push_pull_output();
     let mut rh40 = gpioa.pa6.into_push_pull_output();
     let mut rh60 = gpioa.pa5.into_push_pull_output();
     let mut rh80 = gpioa.pa4.into_push_pull_output();
     let mut rh90 = gpioa.pa3.into_push_pull_output();
 
-    // initialize sw
-    let sw = gpioa.pa8.into_pull_down_input();
+    // reduce power by setting all pins to low:
 
-    delay.delay(100.milliseconds());
+    let _ = gpioa.pa0.into_analog();
+    let _ = gpioa.pa1.into_analog();
+    let _ = gpioa.pa2.into_analog();
+    let _ = gpioa.pa11.into_analog();
+    let _ = gpioa.pa12.into_analog();
+    let _ = gpiob.pb0.into_analog();
+    let _ = gpiob.pb1.into_analog();
+    let _ = gpiob.pb6.into_analog();
+    let _ = gpiob.pb7.into_analog();
 
+
+    // I2C setup
     let sda = gpioa.pa10.into_open_drain_output();
     let scl = gpioa.pa9.into_open_drain_output();
     let i2c1 = dp.I2C1.i2c(sda, scl, 100_000.Hz(), &mut rcc);
-
     let mut sht40 = Sht4x::new_with_address(i2c1, Address0x44);
 
+    let exti_line = ConfigurableLine::RtcWakeup;
+
+    rtc.enable_interrupts(rtc::Interrupts {
+        wakeup_timer: true,
+        ..rtc::Interrupts::default()
+    });
+    exti.listen_configurable(exti_line, TriggerEdge::Rising);
+
     loop {
-        let measurement = sht40.measure(Precision::Low, &mut delay);
-        // Convert temperature measurand into different formats for further
-        // processing.
-        if let Ok(measurement) = measurement {
-            let _temperature: f32 = measurement.temperature_celsius().to_num();
+        if let Ok(measurement) = sht40.measure(Precision::Low, &mut delay) {
             let humidity: f32 = measurement.humidity_percent().to_num();
 
-            match humidity {
-                0.0..=40.0 => {
-                    rh30.set_high().unwrap();
-                }
-                40.0..=60.0 => {
-                    rh40.set_high().unwrap();
-                }
-                60.0..=80.0 => {
-                    rh60.set_high().unwrap();
-                }
-                80.0..=90.0 => {
-                    rh80.set_high().unwrap();
-                }
-                90.0..=100.0 => {
-                    rh90.set_high().unwrap();
-                }
-                _ => {}
+            // Light only one LED briefly to reduce power
+            if humidity <= 30.0 {
+                rh30.set_high().ok();
+            } else if humidity <= 40.0 {
+                rh40.set_high().ok();
+            } else if humidity <= 60.0 {
+                rh60.set_high().ok();
+            } else if humidity <= 80.0 {
+                rh80.set_high().ok();
+            } else {
+                rh90.set_high().ok();
             }
+
+            delay.delay(150.milliseconds());
+
+            // Turn off all LEDs to save power
+            rh30.set_low().ok();
+            rh40.set_low().ok();
+            rh60.set_low().ok();
+            rh80.set_low().ok();
+            rh90.set_low().ok();
         }
-        delay.delay(500.milliseconds());
+
+        rtc.wakeup_timer().start(1u32);
+
+        exti.wait_for_irq(exti_line, pwr.standby_mode(&mut scb));
     }
 }
